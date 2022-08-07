@@ -13,7 +13,7 @@ class SicNoticias():
             c+=1
             try:
                 link=newsCard.find("article").find("figure").find("a").get("href")
-                link="https://sicnoticias.pt/"+link if "https://" not in link else link
+                link="https://sicnoticias.pt"+link if "https://" not in link else link
 
                 noticia={
                     "link":link,

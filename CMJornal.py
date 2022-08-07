@@ -11,7 +11,7 @@ class CMJornal():
         for newsCard in cards:
             try:
                 link=newsCard.find("div").find("figure").find("a").get("href")
-                link="https://sicnoticias.pt/"+link if "https://" not in link else link
+                link="https://cmjornal.pt"+link if "https://" not in link else link
 
                 noticia={
                     "link":link,
