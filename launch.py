@@ -15,6 +15,18 @@ urls_breaking=[
     'https://www.dn.pt/ultimas.html',
     'https://www.jn.pt/ultimas.html'
 ]
+
+urls_politica=[]
+urls_sociedade=[]
+urls_dinheiro=[] # TODO: adicionar o dinheiro vivo
+urls_portugal=[]
+urls_mundo=[]
+urls_desporto=[]
+urls_cultura=[]
+urls_viver=[]
+urls_tecnologia=[]
+urls_fama=[] # TODO: adicionar a revista flash
+
 app = Flask(__name__)
 
 def filterGroupByTitle(news):
