@@ -17,7 +17,8 @@ class CMJornal():
                     "link":link,
                     "image":newsCard.find("div", class_="figure_container").find("figure").find("a").find("img").get("src"),
                     "title":newsCard.find("div", class_="text_container").find("h2").find("a").get_text(),
-                    "text":newsCard.find("div", class_="text_container").find("p").get_text()
+                    "text":newsCard.find("div", class_="text_container").find("p").get_text(),
+                    "website":"CMJORNAL"
                 }
                 retorno.append(noticia)
             except:

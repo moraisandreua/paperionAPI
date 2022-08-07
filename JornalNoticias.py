@@ -16,7 +16,8 @@ class JornalNoticias():
                     "link":link,
                     "image":newsCard.find("header").find("figure").find("a").find("picture").find("img").get("data-src"),
                     "title":newsCard.find("header").find("h2").find("a").get_text(),
-                    "text":self.getTextFromTitle(link)
+                    "text":self.getTextFromTitle(link),
+                    "website":"JORNALNOTICIAS"
                 }
 
                 retorno.append(noticia)

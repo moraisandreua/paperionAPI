@@ -13,7 +13,8 @@ class NoticiasAoMinuto():
                 "link":newsCard.find("a").get("href"),
                 "image":newsCard.find("a").find("img").get("src"),
                 "title":newsCard.find("a").find("div").find("p").get_text(),
-                "text":self.getTextFromTitle(newsCard.find("a").get("href"))
+                "text":self.getTextFromTitle(newsCard.find("a").get("href")),
+                "website":"NOTICIASAOMINUTO"
             }
             retorno.append(noticia)
         

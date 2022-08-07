@@ -19,7 +19,8 @@ class SicNoticias():
                     "link":link,
                     "image":newsCard.find("article").find("figure").find("a").find("picture").find("img").get("src"),
                     "title":newsCard.find("article").find("div").find("h2").find("a").get_text(),
-                    "text":self.getTextFromTitle(link)
+                    "text":self.getTextFromTitle(link),
+                    "website":"SICNOTICIAS"
                 }
                 retorno.append(noticia)
             except:

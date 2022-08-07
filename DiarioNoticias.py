@@ -19,7 +19,8 @@ class DiarioNoticias():
                     "link":link,
                     "image":newsCard.find("header").find("a", class_="t-am-pic").find("figure").find("img").get("src"),
                     "title":newsCard.find("header").find("a", class_="t-am-text").find("h2").find("span").get_text(),
-                    "text":self.getTextFromTitle(link)
+                    "text":self.getTextFromTitle(link),
+                    "website":"DIARIONOTICIAS"
                 }
 
                 retorno.append(noticia)
