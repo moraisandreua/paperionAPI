@@ -1,21 +1,15 @@
 import requests
 import json
 from bs4 import BeautifulSoup
-from CMJornal import CMJornal
-from DiarioNoticias import DiarioNoticias
-from JornalNoticias import JornalNoticias
-from NoticiasAoMinuto import NoticiasAoMinuto
-from SicNoticias import SicNoticias
+from parsers.PT.CMJornal import CMJornal
+from parsers.PT.DiarioNoticias import DiarioNoticias
+from parsers.PT.JornalNoticias import JornalNoticias
+from parsers.PT.NoticiasAoMinuto import NoticiasAoMinuto
+from parsers.PT.SicNoticias import SicNoticias
 from flask import Flask
 
-urls_breaking=[ 
-    'https://www.noticiasaominuto.com/',
-    'https://sicnoticias.pt/ultimas',
-    'https://www.cmjornal.pt/exclusivos?ref=CmaoMinuto_DestaquesPrincipais',
-    'https://www.dn.pt/ultimas.html',
-    'https://www.jn.pt/ultimas.html'
-]
-
+# URLs to scrap
+urls_breaking=[]
 urls_politica=[]
 urls_sociedade=[]
 urls_dinheiro=[] # TODO: adicionar o dinheiro vivo
@@ -26,6 +20,15 @@ urls_cultura=[]
 urls_viver=[]
 urls_tecnologia=[]
 urls_fama=[] # TODO: adicionar a revista flash
+
+# dictionary to match URL to PARSER
+urls_parser={
+    "noticiasaominuto.com":NoticiasAoMinuto,
+    "sicnoticias.pt":SicNoticias,
+    "cmjornal.pt":CMJornal,
+    "dn.pt":DiarioNoticias,
+    "jn.pt":JornalNoticias
+}
 
 app = Flask(__name__)
 
@@ -62,21 +65,8 @@ def breakingNews():
         req = requests.get(site)
         soup = BeautifulSoup(req.content, "html.parser")
         
-        parser=None
-        if "noticiasaominuto.com" in site:
-            parser=NoticiasAoMinuto(soup)
-
-        if "sicnoticias.pt" in site:
-            parser=SicNoticias(soup)
-
-        if "cmjornal.pt" in site:
-            parser=CMJornal(soup)
-
-        if "dn.pt" in site:
-            parser=DiarioNoticias(soup)
-
-        if "jn.pt" in site:
-            parser=JornalNoticias(soup)
+        parser=[urls_parser[x] for x in urls_parser if x in site][0]
+        parser=parser(soup)
         
         if parser!=None:
             content_breaking.extend(parser.fromBreaking())
@@ -86,4 +76,9 @@ def breakingNews():
     return json.dumps(retornoFiltered, ensure_ascii=False)
 
 if __name__ == "__main__":
+    f=open("conf.json", "r")
+    obj_conf=json.loads(f.read())
+
+    urls_breaking=obj_conf["PT"]["breaking"] # TODO: alterar para aceitar escolha de linguas
+
     app.run()
