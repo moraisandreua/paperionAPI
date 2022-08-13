@@ -1,2 +1,4 @@
 beautifulsoup4
 flask
+APScheduler
+mysql-connector-python
