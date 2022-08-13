@@ -119,7 +119,76 @@ def breakingNews():
     retornoFiltered=filterGroupByTitle(content_breaking)
 
     return json.dumps(retornoFiltered, ensure_ascii=False)
-    
+
+
+@app.route("/register", methods=['GET'])
+def registerUser():
+    pass
+
+
+@app.route("/shorts", methods=['GET'])
+def getShorts():
+    pass
+
+
+@app.route("/newsSeen", methods=['POST'])
+def newsSeen():
+    pass
+
+
+@app.route("/newsLike", methods=['POST'])
+def newsLike():
+    pass
+
+
+@app.route("/newsSave", methods=['POST'])
+def newsSave():
+    pass
+
+
+@app.route("/newsSaved", methods=['GET'])
+def getSavedNews():
+    pass
+
+
+@app.route("/newsUnlike", methods=['DELETE'])
+def newsUnlike():
+    pass
+
+
+@app.route("/newsUnsave", methods=['DELETE'])
+def newsUnsave():
+    pass
+
+
+@app.route("/changeCountry", methods=['PUT'])
+def changeCountry():
+    pass
+
+
+@app.route("/deletePref", methods=['DELETE'])
+def deletePref():
+    pass
+
+
+@app.route("/news", methods=['GET'])
+def getNewsInfo():
+    pass
+
+
+@app.route("/notifications", methods=['GET'])
+def getNotifications():
+    pass
+
+
+@app.route("/genre", methods=['GET'])
+def getGenreNews():
+    pass
+
+
+@app.route("/genres", methods=['GET'])
+def getAllGenres():
+    pass
 
 if __name__ == "__main__":
     f=open("conf.json", "r")
