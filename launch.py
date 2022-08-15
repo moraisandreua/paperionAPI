@@ -5,7 +5,7 @@ import time
 import atexit
 from apscheduler.schedulers.background import BackgroundScheduler
 import mysql.connector
-from flask import Flask
+from flask import Flask, request
 from parsers.PT.CMJornal import CMJornal
 from parsers.PT.DiarioNoticias import DiarioNoticias
 from parsers.PT.JornalNoticias import JornalNoticias
@@ -46,17 +46,44 @@ def connectDB():
 def taskGetBreaking():
     clearOldBreaking()
 
-    for site in urls_breaking:
-        req = requests.get(site)
+    print("log: scrapping 'breaking' category")
+
+    for lang in obj_conf:
+        urls_breaking=obj_conf[lang]["breaking"]
+
+        for site in urls_breaking:
+            req = requests.get(site)
+            soup = BeautifulSoup(req.content, "html.parser")
+            
+            parser=[urls_parser[x] for x in urls_parser if x in site][0]
+            parser=parser(soup)
+            
+            if parser!=None:
+                info=parser.fromBreaking()
+                for n in info:
+                    saveNewsInDatabase(n["title"], n["text"], n["image"], n["link"], n["website"], "Breaking", lang)
+
+
+def taskGetCategories():
+    def scrapWebsiteCategory(requested_website, category):
+        req = requests.get(requested_website)
         soup = BeautifulSoup(req.content, "html.parser")
-        
-        parser=[urls_parser[x] for x in urls_parser if x in site][0]
+
+        parser = [urls_parser[wsite] for wsite in urls_parser if wsite in requested_website ][0]
         parser=parser(soup)
-        
+
         if parser!=None:
-            info=parser.fromBreaking()
+            info=parser.fromSection(category)
             for n in info:
-                saveNewsInDatabase(n["title"], n["text"], n["image"], n["link"], n["website"], "Breaking", "PT")
+                saveNewsInDatabase(n["title"], n["text"], n["image"], n["link"], n["website"], category.capitalize(), lang)
+
+    for lang in obj_conf:
+        for section in obj_conf[lang]:
+            time.sleep(60)
+            print("log: scrapping '"+section+"' category")
+            for link in obj_conf[lang][section]:
+                scrapWebsiteCategory(link, section)
+
 
 
 def clearOldBreaking():
@@ -71,10 +98,22 @@ def saveNewsInDatabase(title, text, image, link, website, genreName, countrySymb
     mydb=connectDB()
     mycursor = mydb.cursor()
 
+    # ignore the already added news
+    sql="SELECT id FROM news WHERE website LIKE %s AND genreId!=(SELECT id FROM genre WHERE name LIKE 'Breaking' LIMIT 1)"
+    params=(website,)
+    mycursor.execute(sql, params)
+
+    myresult = mycursor.fetchall()
+    if len(myresult)>0:
+        return True
+
+    # add to database if not in there
     sql="INSERT INTO news(image, title, text, link, website, genreId, countryId) values(%s, %s, %s, %s, %s, (SELECT id FROM genre WHERE name LIKE %s LIMIT 1), (SELECT id FROM country WHERE symbol LIKE %s LIMIT 1))"
     params=(image, title, text, link, website, genreName, countrySymbol)
     mycursor.execute(sql, params)
     mydb.commit()
+
+    return True
 
 
 def filterGroupByTitle(news):
@@ -183,21 +222,53 @@ def getNotifications():
 
 @app.route("/genre", methods=['GET'])
 def getGenreNews():
-    pass
+    mydb=connectDB()
+    mycursor = mydb.cursor()
+
+    if "genreId" not in request.args:
+        return json.dumps({"status":"error"}, ensure_ascii=False)
+    
+    genreId = request.args.get('genreId')
+
+    sql="SELECT title, text, image, link, website FROM news WHERE genreId=%s"
+    params=(genreId,)
+
+    mycursor.execute(sql, params)
+    myresult = mycursor.fetchall()
+
+    retorno=[]
+    if len(myresult)>0:
+        for n in myresult:
+            retorno.append({ "title":n[0], "text":n[1], "image":n[2], "link":n[3], "website":n[4] })
+
+    return json.dumps(retorno, ensure_ascii=False)
 
 
 @app.route("/genres", methods=['GET'])
 def getAllGenres():
-    pass
+    mydb=connectDB()
+    mycursor = mydb.cursor()
+
+    sql="SELECT id, name FROM genre"
+
+    mycursor.execute(sql)
+    myresult = mycursor.fetchall()
+
+    retorno=[]
+    if len(myresult)>0:
+        for g in myresult:
+            retorno.append({"id":g[0], "name":g[1]})
+
+    return json.dumps(retorno, ensure_ascii=False)
+
 
 if __name__ == "__main__":
     f=open("conf.json", "r")
     obj_conf=json.loads(f.read())
 
-    urls_breaking=obj_conf["PT"]["breaking"] # TODO: alterar para aceitar escolha de linguas
-
     scheduler = BackgroundScheduler()
-    scheduler.add_job(func=taskGetBreaking, trigger="interval", seconds=60)
+    scheduler.add_job(func=taskGetBreaking, trigger="interval", seconds=720)
+    scheduler.add_job(func=taskGetCategories, trigger="interval", seconds=720)
     scheduler.start()
 
     atexit.register(lambda: scheduler.shutdown())

@@ -29,7 +29,28 @@ class SicNoticias():
         return retorno
 
     def fromSection(self, section):
-        pass
+        retorno=[]
+        
+        cards = self.response.find("ul", class_="latest-list").find_all("li")
+
+        for newsCard in cards:
+            try:
+                link=newsCard.find("article").find("figure").find("a").get("href")
+                link="https://sicnoticias.pt"+link if "https://" not in link else link
+
+                noticia={
+                    "link":link,
+                    "image":newsCard.find("article").find("figure").find("a").find("picture").find("img").get("src"),
+                    "title":newsCard.find("article").find("div").find("h2").find("a").get_text(),
+                    "text":self.getTextFromTitle(link),
+                    "website":"SICNOTICIAS"
+                }
+                retorno.append(noticia)
+            except:
+                print("        error: error obtaining data from SICNOTICIAS on '"+section+"'")
+                continue
+        
+        return retorno
 
     def getTextFromTitle(self, url):
         req = requests.get(url)

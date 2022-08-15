@@ -21,7 +21,23 @@ class NoticiasAoMinuto():
         return retorno
 
     def fromSection(self, section):
-        pass
+        retorno=[]
+        cards = self.response.find_all("div", class_="main-carousel-item-container")
+        for newsCard in cards:
+            try:
+                noticia={
+                    "link":newsCard.find("a").get("href"),
+                    "image":newsCard.find("a").find("img").get("src"),
+                    "title":newsCard.find("a").find("div").find("p").get_text(),
+                    "text":self.getTextFromTitle(newsCard.find("a").get("href")),
+                    "website":"NOTICIASAOMINUTO"
+                }
+                retorno.append(noticia)
+            except:
+                print("        error: error obtaining data from NOTICIASAOMINUTO on '"+section+"'")
+                continue
+        
+        return retorno
 
     def getTextFromTitle(self, url):
         req = requests.get(url)
