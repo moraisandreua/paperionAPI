@@ -28,7 +28,7 @@ class JornalNoticias():
 
     def fromSection(self, section):
         retorno=[]
-        cards = self.response.find("div", class_="t-g1-l2-i-i").find_all("article", class_="t-g1-l2-am1")
+        cards = self.response.find_all("article", class_="t-g1-l2-am1")
         for newsCard in cards:
             try:
                 link=newsCard.find("header").find("figure").find("a").get("href")
@@ -51,4 +51,12 @@ class JornalNoticias():
     def getTextFromTitle(self, url):
         req = requests.get(url)
         soup = BeautifulSoup(req.content, "html.parser")
-        return soup.find("p", class_="t-article-content-intro-1").find("strong").get_text()
+        
+        retorno="No text found for this news"
+        
+        try:
+            retorno=soup.find("p", class_="t-article-content-intro-1").find("strong").get_text()
+        except:
+            print("    error getting text for this news:", url)
+       
+        return retorno

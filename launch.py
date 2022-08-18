@@ -11,7 +11,10 @@ from parsers.PT.DiarioNoticias import DiarioNoticias
 from parsers.PT.JornalNoticias import JornalNoticias
 from parsers.PT.NoticiasAoMinuto import NoticiasAoMinuto
 from parsers.PT.SicNoticias import SicNoticias
+import sys
 
+# to record the errors in other file
+#sys.stdout = open('output.txt','w')
 
 # URLs to scrap
 obj_conf={}
@@ -65,7 +68,8 @@ def taskGetBreaking():
 
 
 def taskGetCategories():
-    def scrapWebsiteCategory(requested_website, category):
+    def scrapWebsiteCategory(requested_website, category, lang):
+        print(requested_website)
         req = requests.get(requested_website)
         soup = BeautifulSoup(req.content, "html.parser")
 
@@ -77,12 +81,17 @@ def taskGetCategories():
             for n in info:
                 saveNewsInDatabase(n["title"], n["text"], n["image"], n["link"], n["website"], category.capitalize(), lang)
 
+    #scrapWebsiteCategory('https://www.jn.pt/justica.html', 'politics', 'PT')
     for lang in obj_conf:
         for section in obj_conf[lang]:
-            time.sleep(60)
+            time.sleep(5)
+
+            if section=="breaking":
+                continue
+
             print("log: scrapping '"+section+"' category")
             for link in obj_conf[lang][section]:
-                scrapWebsiteCategory(link, section)
+                scrapWebsiteCategory(link, section, lang)
 
 
 
@@ -266,10 +275,11 @@ if __name__ == "__main__":
     f=open("conf.json", "r")
     obj_conf=json.loads(f.read())
 
-    scheduler = BackgroundScheduler()
-    scheduler.add_job(func=taskGetBreaking, trigger="interval", seconds=720)
-    scheduler.add_job(func=taskGetCategories, trigger="interval", seconds=720)
-    scheduler.start()
+    #scheduler = BackgroundScheduler()
+    #scheduler.add_job(func=taskGetBreaking, trigger="interval", seconds=30)
+    #cheduler.add_job(func=taskGetCategories, trigger="interval", seconds=30)
+    #scheduler.start()
+    taskGetCategories()
 
     atexit.register(lambda: scheduler.shutdown())
 
