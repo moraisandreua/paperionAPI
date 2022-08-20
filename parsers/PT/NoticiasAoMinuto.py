@@ -43,4 +43,10 @@ class NoticiasAoMinuto():
         req = requests.get(url)
         soup = BeautifulSoup(req.content, "html.parser")
 
-        return soup.find("div", class_="article-excerpt").get_text()
+        if soup.find("div", class_="article-excerpt"):
+            return soup.find("div", class_="article-excerpt").get_text()
+
+        if soup.find("h2", class_="news-subheadline"):
+            return soup.find("h2", class_="news-subheadline").get_text()
+
+        return "Nenhum texto para mostrar nesta notícia!"

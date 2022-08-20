@@ -18,12 +18,13 @@ class SicNoticias():
                 noticia={
                     "link":link,
                     "image":newsCard.find("article").find("figure").find("a").find("picture").find("img").get("src"),
-                    "title":newsCard.find("article").find("div").find("h2").find("a").get_text(),
+                    "title":newsCard.find("article").find("div", class_="text-details").find("h2").find("a").get_text(),
                     "text":self.getTextFromTitle(link),
                     "website":"SICNOTICIAS"
                 }
                 retorno.append(noticia)
             except:
+                print("    error: error obtaining data from SICNOTICIAS on 'breaking'")
                 continue
         
         return retorno
@@ -37,17 +38,17 @@ class SicNoticias():
             try:
                 link=newsCard.find("article").find("figure").find("a").get("href")
                 link="https://sicnoticias.pt"+link if "https://" not in link else link
-
+                
                 noticia={
                     "link":link,
                     "image":newsCard.find("article").find("figure").find("a").find("picture").find("img").get("src"),
-                    "title":newsCard.find("article").find("div").find("h2").find("a").get_text(),
+                    "title":newsCard.find("article").find("div", class_="text-details").find("h2").find("a").get_text(),
                     "text":self.getTextFromTitle(link),
                     "website":"SICNOTICIAS"
                 }
                 retorno.append(noticia)
             except:
-                print("        error: error obtaining data from SICNOTICIAS on '"+section+"'")
+                print("    error: error obtaining data from SICNOTICIAS on '"+section+"'")
                 continue
         
         return retorno
@@ -56,4 +57,10 @@ class SicNoticias():
         req = requests.get(url)
         soup = BeautifulSoup(req.content, "html.parser")
 
-        return soup.find("div", class_="item-1 item-1-1 item-odd item-first item-last first CT-html").find("p").find("strong").get_text()
+        if soup.find("div", class_="CT-html").find("p").find("strong"):
+            return soup.find("div", class_="CT-html").find("p").find("strong").get_text()
+        
+        if soup.find("div", class_="g-article-lead lead"):
+            return soup.find("div", class_="g-article-lead lead").get_text()
+        
+        return "Nenhum texto encontrado para este artigo de opinião"

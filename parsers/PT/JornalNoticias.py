@@ -53,6 +53,9 @@ class JornalNoticias():
         soup = BeautifulSoup(req.content, "html.parser")
         
         retorno="No text found for this news"
+
+        if "/videos/" in url:
+            return retorno
         
         try:
             retorno=soup.find("p", class_="t-article-content-intro-1").find("strong").get_text()

@@ -12,9 +12,10 @@ from parsers.PT.JornalNoticias import JornalNoticias
 from parsers.PT.NoticiasAoMinuto import NoticiasAoMinuto
 from parsers.PT.SicNoticias import SicNoticias
 import sys
+import secrets
 
 # to record the errors in other file
-#sys.stdout = open('output.txt','w')
+sys.stdout = open('output.txt','w')
 
 # URLs to scrap
 obj_conf={}
@@ -69,7 +70,6 @@ def taskGetBreaking():
 
 def taskGetCategories():
     def scrapWebsiteCategory(requested_website, category, lang):
-        print(requested_website)
         req = requests.get(requested_website)
         soup = BeautifulSoup(req.content, "html.parser")
 
@@ -81,10 +81,10 @@ def taskGetCategories():
             for n in info:
                 saveNewsInDatabase(n["title"], n["text"], n["image"], n["link"], n["website"], category.capitalize(), lang)
 
-    #scrapWebsiteCategory('https://www.jn.pt/justica.html', 'politics', 'PT')
+    #scrapWebsiteCategory('https://www.noticiasaominuto.com/casa', 'lifestyle', 'PT')
     for lang in obj_conf:
         for section in obj_conf[lang]:
-            time.sleep(5)
+            time.sleep(300)
 
             if section=="breaking":
                 continue
@@ -108,8 +108,8 @@ def saveNewsInDatabase(title, text, image, link, website, genreName, countrySymb
     mycursor = mydb.cursor()
 
     # ignore the already added news
-    sql="SELECT id FROM news WHERE website LIKE %s AND genreId!=(SELECT id FROM genre WHERE name LIKE 'Breaking' LIMIT 1)"
-    params=(website,)
+    sql="SELECT id FROM news WHERE link LIKE %s AND genreId!=(SELECT id FROM genre WHERE name LIKE 'Breaking' LIMIT 1)"
+    params=(link,)
     mycursor.execute(sql, params)
 
     myresult = mycursor.fetchall()
@@ -171,42 +171,194 @@ def breakingNews():
 
 @app.route("/register", methods=['GET'])
 def registerUser():
-    pass
+    if "countryId" not in request.args:
+        return json.dumps({"status":"error"}, ensure_ascii=False)
+
+    mydb=connectDB()
+    mycursor = mydb.cursor()
+
+    countryId=request.args.get("countryId")
+    authToken=""
+
+    # check if there is a user with this token
+    myresult=[0]
+    while len(myresult)>0:
+        authToken=secrets.token_hex(16)
+
+        sql="SELECT id FROM user WHERE auth_token=%s"
+        params=(authToken,)
+        mycursor.execute(sql, params)
+        myresult = mycursor.fetchall()
+
+    # add new user
+    sql="INSERT INTO user(countryId, auth_token) VALUES(%s, %s)"
+    params=(countryId, params)
+
+    mycursor.execute(sql, params)
+    mydb.commit()
+
+    # return authToken
+    return json.dumps({"auth_token":authToken}, ensure_ascii=False)
 
 
 @app.route("/shorts", methods=['GET'])
 def getShorts():
-    pass
+    if "auth_token" not in request.args:
+        return json.dumps({"status":"error"}, ensure_ascii=False)
+
+    auth_token=request.args.get("auth_token")
+
+    sql="SELECT news.genreId, count(news.id) AS pref FROM liked INNER JOIN news ON news.id=liked.newsId INNER JOIN user ON user.id=liked.userId WHERE user.auth_token=%s GROUP BY news.genreId ORDER BY pref DESC;"
+    params=(auth_token,)
+
+    # TODO: test this after everything else working
+
+
 
 
 @app.route("/newsSeen", methods=['POST'])
 def newsSeen():
-    pass
+    if "auth_token" not in request.POST or "newsId" not in request.POST:
+        return json.dumps({"status":"error"}, ensure_ascii=False)
+    
+    auth_token=request.POST["auth_token"]
+    newsId=request.POST["newsId"]
+
+    mydb=connectDB()
+    mycursor = mydb.cursor()
+
+    # check if the user already saw it
+    sql="SELECT * FROM newsView WHERE userId=(SELECT id FROM user WHERE auth_token=%s LIMIT 1) AND newsId=%s"
+    params=(auth_token,newsId)
+
+    mycursor.execute(sql, params)
+    myresult = mycursor.fetchall()
+
+    if len(myresult)>0:
+        return json.dumps({"status":"success"}, ensure_ascii=False)
+
+    # insert 'view' in db
+    sql="INSERT INTO newsView(userId, newsId) VALUES((SELECT id FROM user WHERE auth_token=%s LIMIT 1), %s)"
+
+    mycursor.execute(sql, params)
+    mydb.commit()
+
+    return json.dumps({"status":"success"}, ensure_ascii=False)
 
 
 @app.route("/newsLike", methods=['POST'])
 def newsLike():
-    pass
+    if "auth_token" not in request.POST or "newsId" not in request.POST:
+        return json.dumps({"status":"error"}, ensure_ascii=False)
+    
+    auth_token=request.POST["auth_token"]
+    newsId=request.POST["newsId"]
+
+    mydb=connectDB()
+    mycursor = mydb.cursor()
+
+    # check if the user already liked it
+    sql="SELECT * FROM liked WHERE userId=(SELECT id FROM user WHERE auth_token=%s LIMIT 1) AND newsId=%s"
+    params=(auth_token,newsId)
+
+    mycursor.execute(sql, params)
+    myresult = mycursor.fetchall()
+
+    if len(myresult)>0:
+        return json.dumps({"status":"success"}, ensure_ascii=False)
+
+    # insert like in db
+    sql="INSERT INTO liked(userId, newsId) VALUES((SELECT id FROM user WHERE auth_token=%s LIMIT 1), %s)"
+
+    mycursor.execute(sql, params)
+    mydb.commit()
+
+    return json.dumps({"status":"success"}, ensure_ascii=False)
 
 
 @app.route("/newsSave", methods=['POST'])
 def newsSave():
-    pass
+    if "auth_token" not in request.POST or "newsId" not in request.POST:
+        return json.dumps({"status":"error"}, ensure_ascii=False)
+    
+    auth_token=request.POST["auth_token"]
+    newsId=request.POST["newsId"]
+
+    mydb=connectDB()
+    mycursor = mydb.cursor()
+
+    # check if the user already liked it
+    sql="SELECT * FROM saved WHERE userId=(SELECT id FROM user WHERE auth_token=%s LIMIT 1) AND newsId=%s"
+    params=(auth_token,newsId)
+
+    mycursor.execute(sql, params)
+    myresult = mycursor.fetchall()
+
+    if len(myresult)>0:
+        return json.dumps({"status":"success"}, ensure_ascii=False)
+
+    # insert like in db
+    sql="INSERT INTO saved(userId, newsId) VALUES((SELECT id FROM user WHERE auth_token=%s LIMIT 1), %s)"
+
+    mycursor.execute(sql, params)
+    mydb.commit()
+
+    return json.dumps({"status":"success"}, ensure_ascii=False)
 
 
 @app.route("/newsSaved", methods=['GET'])
 def getSavedNews():
-    pass
+    if "auth_token" not in request.args:
+        return json.dumps({"status":"error"}, ensure_ascii=False)
+
+    auth_token=request.args.get("auth_token")
+
+    mydb=connectDB()
+    mycursor = mydb.cursor()
+
+    sql="SELECT news.id, news.title, news.text, news.link, news.website, news.genreId, genre.name FROM saved INNER JOIN news ON saved.newsId=news.id WHERE saved.userId=(SELECT id FROM user WHERE auth_token=%s LIMIT 1)"
+    params=(auth_token,)
+
+    mycursor.execute(sql, params)
+    mydb.commit()
 
 
 @app.route("/newsUnlike", methods=['DELETE'])
 def newsUnlike():
-    pass
+    if "auth_token" not in request.get_json() or "newsId" not in request.get_json():
+        return json.dumps({"status":"error"}, ensure_ascii=False)
 
+    payload=request.get_json()
+    auth_token=payload["auth_token"]
+    newsId=payload["newsId"]
 
+    mydb=connectDB()
+    mycursor = mydb.cursor()
+
+    sql="DELETE FROM liked WHERE userId=(SELECT id FROM user WHERE auth_token=%s LIMIT 1) AND newsId=%s"
+    params=(auth_token,newsId)
+
+    mycursor.execute(sql, params)
+    mydb.commit()
+
+    
 @app.route("/newsUnsave", methods=['DELETE'])
 def newsUnsave():
-    pass
+    if "auth_token" not in request.get_json() or "newsId" not in request.get_json():
+        return json.dumps({"status":"error"}, ensure_ascii=False)
+
+    payload=request.get_json()
+    auth_token=payload["auth_token"]
+    newsId=payload["newsId"]
+
+    mydb=connectDB()
+    mycursor = mydb.cursor()
+
+    sql="DELETE FROM saved WHERE userId=(SELECT id FROM user WHERE auth_token=%s LIMIT 1) AND newsId=%s"
+    params=(auth_token,newsId)
+
+    mycursor.execute(sql, params)
+    mydb.commit()
 
 
 @app.route("/changeCountry", methods=['PUT'])
@@ -275,11 +427,11 @@ if __name__ == "__main__":
     f=open("conf.json", "r")
     obj_conf=json.loads(f.read())
 
-    #scheduler = BackgroundScheduler()
-    #scheduler.add_job(func=taskGetBreaking, trigger="interval", seconds=30)
-    #cheduler.add_job(func=taskGetCategories, trigger="interval", seconds=30)
-    #scheduler.start()
-    taskGetCategories()
+    scheduler = BackgroundScheduler()
+    scheduler.add_job(func=taskGetBreaking, trigger="interval", seconds=3600)
+    scheduler.add_job(func=taskGetCategories, trigger="interval", seconds=3600)
+    scheduler.start()
+    #taskGetCategories()
 
     atexit.register(lambda: scheduler.shutdown())
 
