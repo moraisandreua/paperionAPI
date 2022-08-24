@@ -5,7 +5,7 @@ import time
 import atexit
 from apscheduler.schedulers.background import BackgroundScheduler
 import mysql.connector
-from flask import Flask, request
+from flask import Flask, request, Response
 from parsers.PT.CMJornal import CMJornal
 from parsers.PT.DiarioNoticias import DiarioNoticias
 from parsers.PT.JornalNoticias import JornalNoticias
@@ -44,7 +44,13 @@ urls_parser={
 app = Flask(__name__)
 
 def connectDB():
-    mydb = mysql.connector.connect(host="localhost", user="root", password="root", database="paperion")
+    mydb=None
+
+    try:
+        mydb = mysql.connector.connect(host="localhost", user="root", password="root", database="paperion")
+    except:
+        print("Error connecting to database")
+    
     return mydb
 
 def taskGetBreaking():
@@ -156,23 +162,26 @@ def breakingNews():
     
     content_breaking=[]
 
-    sql="SELECT title, text, image, link, website FROM news INNER JOIN genre on genre.id=news.genreId WHERE genre.name=%s"
-    params=("Breaking",)
-    mycursor.execute(sql, params)
-    myresult = mycursor.fetchall()
+    try:
+        sql="SELECT title, text, image, link, website FROM news INNER JOIN genre on genre.id=news.genreId WHERE genre.name=%s"
+        params=("Breaking",)
+        mycursor.execute(sql, params)
+        myresult = mycursor.fetchall()
 
-    for x in myresult:
-        content_breaking.append({ "title":x[0], "text":x[1], "image":x[2], "link":x[3], "website":x[4] })
+        for x in myresult:
+            content_breaking.append({ "title":x[0], "text":x[1], "image":x[2], "link":x[3], "website":x[4] })
+    except:
+        print("Error on '/breaking' searching for news ")
 
     retornoFiltered=filterGroupByTitle(content_breaking)
 
-    return json.dumps(retornoFiltered, ensure_ascii=False)
+    return Response(json.dumps(retornoFiltered, ensure_ascii=False), status=200, mimetype='application/json')
 
 
 @app.route("/register", methods=['GET'])
 def registerUser():
     if "countryId" not in request.args:
-        return json.dumps({"status":"error"}, ensure_ascii=False)
+        return Response(json.dumps({"status":"O parâmetro 'countryId' é obtrigatório"}, ensure_ascii=False), status=400, mimetype='application/json')
 
     mydb=connectDB()
     mycursor = mydb.cursor()
@@ -181,152 +190,212 @@ def registerUser():
     authToken=""
 
     # check if there is a user with this token
-    myresult=[0]
-    while len(myresult)>0:
-        authToken=secrets.token_hex(16)
+    try:
+        myresult=[0]
+        while len(myresult)>0:
+            authToken=secrets.token_hex(16)
 
-        sql="SELECT id FROM user WHERE auth_token=%s"
-        params=(authToken,)
-        mycursor.execute(sql, params)
-        myresult = mycursor.fetchall()
+            sql="SELECT id FROM user WHERE auth_token=%s"
+            params=(authToken,)
+            mycursor.execute(sql, params)
+            myresult = mycursor.fetchall()
+    except:
+        print("Error on /register, getting an unique token")
+        return Response(json.dumps({"status":"Erro ao encontrar um token para o utilizador"}, ensure_ascii=False), status=500, mimetype='application/json')
 
     # add new user
-    sql="INSERT INTO user(countryId, auth_token) VALUES(%s, %s)"
-    params=(countryId, params)
+    try:
+        sql="INSERT INTO user(countryId, auth_token) VALUES(%s, %s)"
+        params=(countryId, authToken)
 
-    mycursor.execute(sql, params)
-    mydb.commit()
+        mycursor.execute(sql, params)
+        mydb.commit()
+    except:
+        print("Error on /register, inserting new user")
+        return Response(json.dumps({"status":"Erro ao adicionar o utilizador à BD"}, ensure_ascii=False), status=500, mimetype='application/json')
 
     # return authToken
-    return json.dumps({"auth_token":authToken}, ensure_ascii=False)
+    return Response(json.dumps({"auth_token":authToken}, ensure_ascii=False), status=200, mimetype='application/json')
 
 
 @app.route("/shorts", methods=['GET'])
 def getShorts():
     if "auth_token" not in request.args:
-        return json.dumps({"status":"error"}, ensure_ascii=False)
+        return Response(json.dumps({"status":"O parâmetro 'auth_token' é obtrigatório"}, ensure_ascii=False), status=401, mimetype='application/json')
 
     auth_token=request.args.get("auth_token")
 
-    sql="SELECT news.genreId, count(news.id) AS pref FROM liked INNER JOIN news ON news.id=liked.newsId INNER JOIN user ON user.id=liked.userId WHERE user.auth_token=%s GROUP BY news.genreId ORDER BY pref DESC;"
-    params=(auth_token,)
+    try:
+        sql="SELECT news.genreId, count(news.id) AS pref FROM liked INNER JOIN news ON news.id=liked.newsId INNER JOIN user ON user.id=liked.userId WHERE user.auth_token=%s GROUP BY news.genreId ORDER BY pref DESC;"
+        params=(auth_token,)
 
-    # TODO: test this after everything else working
+        # TODO: test this after everything else working
+    except:
+        print("Error on /shorts, searching for short news")
+        return Response(json.dumps({"status":"Erro ao pesquisar por short news"}, ensure_ascii=False), status=500, mimetype='application/json')
 
-
+    # TODO: return of short news
 
 
 @app.route("/newsSeen", methods=['POST'])
 def newsSeen():
-    if "auth_token" not in request.POST or "newsId" not in request.POST:
-        return json.dumps({"status":"error"}, ensure_ascii=False)
+    postRequest = request.get_json()
+
+    if "auth_token" not in postRequest or "newsId" not in postRequest:
+        return Response(json.dumps({"status":"Os parâmetros 'auth_token' e 'newsId' são obrigatórios"}, ensure_ascii=False), status=401, mimetype='application/json')
     
-    auth_token=request.POST["auth_token"]
-    newsId=request.POST["newsId"]
+    auth_token=postRequest["auth_token"]
+    newsId=postRequest["newsId"]
 
     mydb=connectDB()
     mycursor = mydb.cursor()
 
     # check if the user already saw it
-    sql="SELECT * FROM newsView WHERE userId=(SELECT id FROM user WHERE auth_token=%s LIMIT 1) AND newsId=%s"
-    params=(auth_token,newsId)
+    try:
+        sql="SELECT * FROM newsView WHERE userId=(SELECT id FROM user WHERE auth_token=%s LIMIT 1) AND newsId=%s"
+        params=(auth_token,newsId)
 
-    mycursor.execute(sql, params)
-    myresult = mycursor.fetchall()
+        mycursor.execute(sql, params)
+        myresult = mycursor.fetchall()
 
-    if len(myresult)>0:
-        return json.dumps({"status":"success"}, ensure_ascii=False)
+        if len(myresult)>0:
+            return Response(json.dumps({"status":"success"}, ensure_ascii=False), status=200, mimetype='application/json')
+    except:
+        print("Error on /newsSeen, checking if user already saw the news")
+        return Response(json.dumps({"status":"Erro ao verificar se o utilizador já viu a notifica"}, ensure_ascii=False), status=500, mimetype='application/json')
 
     # insert 'view' in db
-    sql="INSERT INTO newsView(userId, newsId) VALUES((SELECT id FROM user WHERE auth_token=%s LIMIT 1), %s)"
+    try:
+        sql="INSERT INTO newsView(userId, newsId) VALUES((SELECT id FROM user WHERE auth_token=%s LIMIT 1), %s)"
 
-    mycursor.execute(sql, params)
-    mydb.commit()
+        mycursor.execute(sql, params)
+        mydb.commit()
+    except:
+        print("Error on /newsSeen, inserting view in database")
+        return Response(json.dumps({"status":"Erro ao inserir 'view' na base de dados"}, ensure_ascii=False), status=500, mimetype='application/json')
 
-    return json.dumps({"status":"success"}, ensure_ascii=False)
+    return Response(json.dumps({"status":"success"}, ensure_ascii=False), status=200, mimetype='application/json')
 
 
 @app.route("/newsLike", methods=['POST'])
 def newsLike():
-    if "auth_token" not in request.POST or "newsId" not in request.POST:
-        return json.dumps({"status":"error"}, ensure_ascii=False)
+    postRequest = request.get_json()
+
+    if "auth_token" not in postRequest or "newsId" not in postRequest:
+        return Response(json.dumps({"status":"Os parâmetros 'auth_token' e 'newsId' são obrigatórios"}, ensure_ascii=False), status=401, mimetype='application/json')
     
-    auth_token=request.POST["auth_token"]
-    newsId=request.POST["newsId"]
+    auth_token=postRequest["auth_token"]
+    newsId=postRequest["newsId"]
 
     mydb=connectDB()
     mycursor = mydb.cursor()
 
     # check if the user already liked it
-    sql="SELECT * FROM liked WHERE userId=(SELECT id FROM user WHERE auth_token=%s LIMIT 1) AND newsId=%s"
-    params=(auth_token,newsId)
+    try:
+        sql="SELECT * FROM liked WHERE userId=(SELECT id FROM user WHERE auth_token=%s LIMIT 1) AND newsId=%s"
+        params=(auth_token,newsId)
 
-    mycursor.execute(sql, params)
-    myresult = mycursor.fetchall()
+        mycursor.execute(sql, params)
+        myresult = mycursor.fetchall()
 
-    if len(myresult)>0:
-        return json.dumps({"status":"success"}, ensure_ascii=False)
+        if len(myresult)>0:
+            return Response(json.dumps({"status":"success"}, ensure_ascii=False), status=200, mimetype='application/json')
+    except:
+        print("Error on /newsLike, checking if user already liked the news")
+        return Response(json.dumps({"status":"Erro ao verificar se o utilizador já gostou da noticia antes"}, ensure_ascii=False), status=500, mimetype='application/json')
 
     # insert like in db
-    sql="INSERT INTO liked(userId, newsId) VALUES((SELECT id FROM user WHERE auth_token=%s LIMIT 1), %s)"
+    try:
+        sql="INSERT INTO liked(userId, newsId) VALUES((SELECT id FROM user WHERE auth_token=%s LIMIT 1), %s)"
 
-    mycursor.execute(sql, params)
-    mydb.commit()
+        mycursor.execute(sql, params)
+        mydb.commit()
+    except:
+        print("Error on /newsLike, inserting like ")
+        return Response(json.dumps({"status":"Erro ao inserir like na base"}, ensure_ascii=False), status=500, mimetype='application/json')
 
-    return json.dumps({"status":"success"}, ensure_ascii=False)
+    return Response(json.dumps({"status":"success"}, ensure_ascii=False), status=200, mimetype='application/json')
 
 
 @app.route("/newsSave", methods=['POST'])
 def newsSave():
-    if "auth_token" not in request.POST or "newsId" not in request.POST:
-        return json.dumps({"status":"error"}, ensure_ascii=False)
+    postRequest = request.get_json()
+
+    if "auth_token" not in postRequest or "newsId" not in postRequest:
+        return Response(json.dumps({"status":"Os parâmetros 'auth_token' e 'newsId' são obrigatórios"}, ensure_ascii=False), status=401, mimetype='application/json')
     
-    auth_token=request.POST["auth_token"]
-    newsId=request.POST["newsId"]
+    auth_token=postRequest["auth_token"]
+    newsId=postRequest["newsId"]
 
     mydb=connectDB()
     mycursor = mydb.cursor()
 
     # check if the user already liked it
-    sql="SELECT * FROM saved WHERE userId=(SELECT id FROM user WHERE auth_token=%s LIMIT 1) AND newsId=%s"
-    params=(auth_token,newsId)
+    try:
+        sql="SELECT * FROM saved WHERE userId=(SELECT id FROM user WHERE auth_token=%s LIMIT 1) AND newsId=%s"
+        params=(auth_token,newsId)
 
-    mycursor.execute(sql, params)
-    myresult = mycursor.fetchall()
+        mycursor.execute(sql, params)
+        myresult = mycursor.fetchall()
 
-    if len(myresult)>0:
-        return json.dumps({"status":"success"}, ensure_ascii=False)
+        if len(myresult)>0:
+            return Response(json.dumps({"status":"success"}, ensure_ascii=False), status=200, mimetype='application/json')
+    except:
+        print("Error on /newsSave, checking if user already liked it")
+        return Response(json.dumps({"status":"Erro ao verificar se o utilizador já guardou a noticia"}, ensure_ascii=False), status=500, mimetype='application/json')
 
     # insert like in db
-    sql="INSERT INTO saved(userId, newsId) VALUES((SELECT id FROM user WHERE auth_token=%s LIMIT 1), %s)"
+    try:
+        sql="INSERT INTO saved(userId, newsId) VALUES((SELECT id FROM user WHERE auth_token=%s LIMIT 1), %s)"
 
-    mycursor.execute(sql, params)
-    mydb.commit()
+        mycursor.execute(sql, params)
+        mydb.commit()
+    except:
+        print("Error on /newsSave, inserting a 'save' in db")
+        return Response(json.dumps({"status":"Erro ao guardar a notícia"}, ensure_ascii=False), status=500, mimetype='application/json')
 
-    return json.dumps({"status":"success"}, ensure_ascii=False)
+    return Response(json.dumps({"status":"success"}, ensure_ascii=False), status=200, mimetype='application/json')
 
 
 @app.route("/newsSaved", methods=['GET'])
 def getSavedNews():
     if "auth_token" not in request.args:
-        return json.dumps({"status":"error"}, ensure_ascii=False)
+        return Response(json.dumps({"status":"O parâmetro 'auth_token' é obrigatório"}, ensure_ascii=False), status=401, mimetype='application/json')
 
     auth_token=request.args.get("auth_token")
 
     mydb=connectDB()
     mycursor = mydb.cursor()
+    
+    retorno=[]
+    try:
+        sql="SELECT news.id, news.title, news.text, news.link, news.website, news.genreId, genre.name FROM saved INNER JOIN news ON saved.newsId=news.id INNER JOIN genre ON genre.id=news.genreId WHERE saved.userId=(SELECT id FROM user WHERE auth_token=%s LIMIT 1)"
+        params=(auth_token,)
 
-    sql="SELECT news.id, news.title, news.text, news.link, news.website, news.genreId, genre.name FROM saved INNER JOIN news ON saved.newsId=news.id WHERE saved.userId=(SELECT id FROM user WHERE auth_token=%s LIMIT 1)"
-    params=(auth_token,)
+        mycursor.execute(sql, params)
+        myresult = mycursor.fetchall()
 
-    mycursor.execute(sql, params)
-    mydb.commit()
+        for n in myresult:
+            retorno.append({
+                "id":n[0],
+                "title":n[1],
+                "text":n[2],
+                "link":n[3],
+                "website":n[4],
+                "genreId":n[5],
+                "genreName":n[6],
+            })
+    except:
+        print("Error on /newsSaved, searching for user's saved news")
+        return Response(json.dumps({"status":"Erro ao pesquisar pelas noticias guardadas do utilizador"}, ensure_ascii=False), status=500, mimetype='application/json')
+    
+    return Response(json.dumps({"news":retorno}, ensure_ascii=False), status=200, mimetype='application/json')
 
 
 @app.route("/newsUnlike", methods=['DELETE'])
 def newsUnlike():
     if "auth_token" not in request.get_json() or "newsId" not in request.get_json():
-        return json.dumps({"status":"error"}, ensure_ascii=False)
+        return Response(json.dumps({"status":"Os parâmetros 'auth_token' e 'newsId' são obrigatórios"}, ensure_ascii=False), status=401, mimetype='application/json')
 
     payload=request.get_json()
     auth_token=payload["auth_token"]
@@ -335,17 +404,23 @@ def newsUnlike():
     mydb=connectDB()
     mycursor = mydb.cursor()
 
-    sql="DELETE FROM liked WHERE userId=(SELECT id FROM user WHERE auth_token=%s LIMIT 1) AND newsId=%s"
-    params=(auth_token,newsId)
+    try:
+        sql="DELETE FROM liked WHERE userId=(SELECT id FROM user WHERE auth_token=%s LIMIT 1) AND newsId=%s"
+        params=(auth_token,newsId)
 
-    mycursor.execute(sql, params)
-    mydb.commit()
+        mycursor.execute(sql, params)
+        mydb.commit()
+    except:
+        print("Error on /newsUnlike, deleting like from database")
+        return Response(json.dumps({"status":"Erro ao eliminar like da base de dados"}, ensure_ascii=False), status=500, mimetype='application/json')
+
+    return Response(json.dumps({"status":"success"}, ensure_ascii=False), status=200, mimetype='application/json')
 
     
 @app.route("/newsUnsave", methods=['DELETE'])
 def newsUnsave():
     if "auth_token" not in request.get_json() or "newsId" not in request.get_json():
-        return json.dumps({"status":"error"}, ensure_ascii=False)
+        return Response(json.dumps({"status":"Os parâmetros 'auth_token' e 'newsId' são obrigatórios"}, ensure_ascii=False), status=401, mimetype='application/json')
 
     payload=request.get_json()
     auth_token=payload["auth_token"]
@@ -354,21 +429,66 @@ def newsUnsave():
     mydb=connectDB()
     mycursor = mydb.cursor()
 
-    sql="DELETE FROM saved WHERE userId=(SELECT id FROM user WHERE auth_token=%s LIMIT 1) AND newsId=%s"
-    params=(auth_token,newsId)
+    try:
+        sql="DELETE FROM saved WHERE userId=(SELECT id FROM user WHERE auth_token=%s LIMIT 1) AND newsId=%s"
+        params=(auth_token,newsId)
 
-    mycursor.execute(sql, params)
-    mydb.commit()
+        mycursor.execute(sql, params)
+        mydb.commit()
+    except:
+        print("Error on /newsUnsave, deleting 'save' from database")
+        return Response(json.dumps({"status":"Erro ao eliminar 'save' da base de dados"}, ensure_ascii=False), status=500, mimetype='application/json')
+
+    return Response(json.dumps({"status":"success"}, ensure_ascii=False), status=200, mimetype='application/json')
 
 
 @app.route("/changeCountry", methods=['PUT'])
 def changeCountry():
-    pass
+    if "auth_token" not in request.get_json() or "countryId" not in request.get_json():
+        return Response(json.dumps({"status":"Os parâmetros 'auth_token' e 'countryId' são obrigatórios"}, ensure_ascii=False), status=401, mimetype='application/json')
+
+    payload=request.get_json()
+    auth_token=payload["auth_token"]
+    countryId=payload["countryId"]
+
+    mydb=connectDB()
+    mycursor = mydb.cursor()
+
+    try:
+        sql="UPDATE user SET countryId=%s WHERE auth_token=%s"
+        params=(countryId, auth_token)
+
+        mycursor.execute(sql, params)
+        mydb.commit()
+    except:
+        print("Error on /changeCountry, updating country in database")
+        return Response(json.dumps({"status":"Erro ao atualizar o pais do utilizador base de dados"}, ensure_ascii=False), status=500, mimetype='application/json')
+
+    return Response(json.dumps({"status":"success"}, ensure_ascii=False), status=200, mimetype='application/json')
 
 
 @app.route("/deletePref", methods=['DELETE'])
 def deletePref():
-    pass
+    if "auth_token" not in request.get_json():
+        return Response(json.dumps({"status":"O parâmetro 'auth_token' é obrigatório"}, ensure_ascii=False), status=401, mimetype='application/json')
+
+    payload=request.get_json()
+    auth_token=payload["auth_token"]
+
+    mydb=connectDB()
+    mycursor = mydb.cursor()
+
+    try:
+        sql="DELETE FROM liked WHERE userId=(SELECT id FROM user WHERE auth_token=%s LIMIT 1)"
+        params=(auth_token,)
+
+        mycursor.execute(sql, params)
+        mydb.commit()
+    except:
+        print("Error on /deletePref, deleting all user likes from database")
+        return Response(json.dumps({"status":"Erro ao eliminar o registo de likes do utilizador"}, ensure_ascii=False), status=500, mimetype='application/json')
+
+    return Response(json.dumps({"status":"success"}, ensure_ascii=False), status=200, mimetype='application/json')
 
 
 @app.route("/news", methods=['GET'])
@@ -378,31 +498,90 @@ def getNewsInfo():
 
 @app.route("/notifications", methods=['GET'])
 def getNotifications():
-    pass
+    if "auth_token" not in request.get_json():
+        return Response(json.dumps({"status":"O parâmetro 'auth_token' é obrigatório"}, ensure_ascii=False), status=401, mimetype='application/json')
+
+    payload=request.get_json()
+    auth_token=payload["auth_token"]
+
+    mydb=connectDB()
+    mycursor = mydb.cursor()
+
+    retorno=[]
+    try:
+        sql="SELECT news.id, news.title, news.text, news.link, news.website, news.genreId, genre.name FROM notification INNER JOIN news ON notification.newsId=news.id INNER JOIN genre ON genre.id=news.genreId WHERE notification.userId=(SELECT id FROM user WHERE auth_token=%s LIMIT 1)"
+        params=(auth_token,)
+
+        mycursor.execute(sql, params)
+        myresult = mycursor.fetchall()
+
+        for n in myresult:
+            retorno.append({
+                "id":n[0],
+                "title":n[1],
+                "text":n[2],
+                "link":n[3],
+                "website":n[4],
+                "genreId":n[5],
+                "genreName":n[6],
+            })
+    except:
+        print("Error on /notifications, searching for user's notifications")
+        return Response(json.dumps({"status":"Erro ao pesquisar as notificações para o utilizador"}, ensure_ascii=False), status=500, mimetype='application/json')    
+    
+    return Response(json.dumps({"news":retorno}, ensure_ascii=False), status=200, mimetype='application/json')
+
+
+@app.route("/notifications", methods=['DELETE'])
+def deleteNotification():
+    if "auth_token" not in request.get_json() or "newsId" not in request.get_json():
+        return Response(json.dumps({"status":"Os parâmetros 'auth_token' e 'newsId' são obrigatórios"}, ensure_ascii=False), status=401, mimetype='application/json')
+
+    payload=request.get_json()
+    auth_token=payload["auth_token"]
+    newsId=payload["newsId"]
+
+    mydb=connectDB()
+    mycursor = mydb.cursor()
+
+    try:
+        sql="DELETE FROM notification WHERE userId=(SELECT id FROM user WHERE auth_token=%s LIMIT 1) AND newsId=%s"
+        params=(auth_token,newsId)
+
+        mycursor.execute(sql, params)
+        mydb.commit()
+    except:
+        print("Error on /notifications, deleting a user notification")
+        return Response(json.dumps({"status":"Erro ao eliminar um notificação do utilizador"}, ensure_ascii=False), status=500, mimetype='application/json') 
+
+    return Response(json.dumps({"status":"success"}, ensure_ascii=False), status=200, mimetype='application/json')        
 
 
 @app.route("/genre", methods=['GET'])
 def getGenreNews():
+    if "genreId" not in request.args:
+        return Response(json.dumps({"status":"O parâmetro 'genreId' é obrigatório"}, ensure_ascii=False), status=401, mimetype='application/json')
+    
     mydb=connectDB()
     mycursor = mydb.cursor()
-
-    if "genreId" not in request.args:
-        return json.dumps({"status":"error"}, ensure_ascii=False)
-    
     genreId = request.args.get('genreId')
 
-    sql="SELECT title, text, image, link, website FROM news WHERE genreId=%s"
-    params=(genreId,)
-
-    mycursor.execute(sql, params)
-    myresult = mycursor.fetchall()
-
     retorno=[]
-    if len(myresult)>0:
-        for n in myresult:
-            retorno.append({ "title":n[0], "text":n[1], "image":n[2], "link":n[3], "website":n[4] })
+    try:
+        sql="SELECT title, text, image, link, website FROM news WHERE genreId=%s"
+        params=(genreId,)
 
-    return json.dumps(retorno, ensure_ascii=False)
+        mycursor.execute(sql, params)
+        myresult = mycursor.fetchall()
+
+        if len(myresult)>0:
+            for n in myresult:
+                retorno.append({ "title":n[0], "text":n[1], "image":n[2], "link":n[3], "website":n[4] })
+    except:
+        print("Error on /genre, searching for genre's news")
+        return Response(json.dumps({"status":"Erro ao pesquisar as notícias de uma categoria"}, ensure_ascii=False), status=500, mimetype='application/json') 
+
+    return Response(json.dumps({"news":retorno}, ensure_ascii=False), status=200, mimetype='application/json')     
 
 
 @app.route("/genres", methods=['GET'])
@@ -410,17 +589,21 @@ def getAllGenres():
     mydb=connectDB()
     mycursor = mydb.cursor()
 
-    sql="SELECT id, name FROM genre"
+    try:
+        sql="SELECT id, name FROM genre"
 
-    mycursor.execute(sql)
-    myresult = mycursor.fetchall()
+        mycursor.execute(sql)
+        myresult = mycursor.fetchall()
 
-    retorno=[]
-    if len(myresult)>0:
-        for g in myresult:
-            retorno.append({"id":g[0], "name":g[1]})
+        retorno=[]
+        if len(myresult)>0:
+            for g in myresult:
+                retorno.append({"id":g[0], "name":g[1]})
+    except:
+        print("Error on /genres, searching for all genres")
+        return Response(json.dumps({"status":"Erro ao pesquisar por todas as categorias"}, ensure_ascii=False), status=500, mimetype='application/json') 
 
-    return json.dumps(retorno, ensure_ascii=False)
+    return Response(json.dumps({"genres":retorno}, ensure_ascii=False), status=200, mimetype='application/json')    
 
 
 if __name__ == "__main__":

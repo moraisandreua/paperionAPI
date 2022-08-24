@@ -1,13 +1,3 @@
 WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
  * Serving Flask app 'launch'
  * Debug mode: off
-log: scrapping 'breaking' category
-log: scrapping 'politics' category
-log: scrapping 'society' category
-log: scrapping 'money' category
-log: scrapping 'national' category
-    error getting text for this news: https://www.jn.pt/nacional/reportagens/notas-do-dia-a-crise-no-sporting-e-a-prenda-de-areia-lunar-9468274.html
-log: scrapping 'international' category
-log: scrapping 'sports' category
-log: scrapping 'culture' category
-log: scrapping 'lifestyle' category
